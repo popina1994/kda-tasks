@@ -1,6 +1,10 @@
+import os
 import sys
-sys.path.insert(0, "/home/popina/kda-tasks/kda-attention-sm89")
-sys.path.insert(0, "/home/popina/kimi-delta-attention")
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+sys.path.insert(0, os.path.join(HERE, "..", ".."))
+sys.path.insert(0, os.environ.get("KDA_ORACLE_DIR", os.path.expanduser("~/kimi-delta-attention")))
 
 import torch
 from reference import make_inputs, reference_naive, reference_chunkwise

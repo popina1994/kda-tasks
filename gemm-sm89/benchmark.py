@@ -1,7 +1,9 @@
+import os
 import sys
 import time
 
-sys.path.insert(0, "/home/popina/cutlass-ref/examples/python/CuTeDSL")
+CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "benchmark.csv")
+sys.path.insert(0, os.environ.get("CUTLASS_CUTE_DSL_DIR", os.path.expanduser("~/cutlass-ref/examples/python/CuTeDSL")))
 
 import torch
 import cutlass
@@ -59,7 +61,7 @@ def main():
             except Exception as e:
                 print(f"cutlass_dsl,{m},{n},{k},{atom},FAILED,{type(e).__name__}: {e}")
 
-    with open("/home/popina/kda-tasks/gemm-sm89/benchmark.csv", "w") as f:
+    with open(CSV_PATH, "w") as f:
         f.write("mode,M,N,K,atom_layout,exec_us,TFLOPs,pct_of_cublas\n")
         for r in rows:
             f.write(",".join(str(x) for x in r) + "\n")

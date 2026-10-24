@@ -7,8 +7,9 @@ dimension B_eff = batch * num_heads, since KDA heads are independent of each
 other (no cross-head mixing in the recurrence) -- this matches how the
 reference repo itself expects to be called (it only has a batch dim).
 """
+import os
 import sys
-sys.path.insert(0, "/home/popina/kimi-delta-attention")
+sys.path.insert(0, os.environ.get("KDA_ORACLE_DIR", os.path.expanduser("~/kimi-delta-attention")))
 
 import torch
 import torch.nn.functional as F

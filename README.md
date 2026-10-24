@@ -1,110 +1,111 @@
 # kda-tasks
 
-Task workspaces from replicating NVIDIA's Kernel Design Agents (KDA) workflow
-on a consumer GPU: RTX 4070 SUPER (sm_89, Ada), WSL2 Ubuntu-22.04, CUDA 12.8,
-torch 2.14.1+cu130.
+A fused CUDA kernel for **Kimi Delta Attention** (KDA) on a consumer GPU
+(RTX 4070 SUPER, sm_89), built with the contract -> draft -> plan -> implement
+-> validate -> promote loop from NVIDIA's
+[Kernel Design Agents](https://nvlabs.github.io/kda/blog/2026-09-27-kda-for-kda/)
+methodology.
 
-KDA blog post: https://nvlabs.github.io/kda/blog/2026-09-27-kda-for-kda/
-KDA methodology repo (prompts/skills only): https://github.com/NVlabs/kda
-(cloned separately at `~/kda-repo`, deliberately not part of this repo).
+The blog's own benchmark (KDAttn/FlashKDA on a B300) relies on Hopper/Blackwell
+features (TMA, tcgen05) that Ada doesn't have. This repo applies the same
+workflow to tasks that fit sm_89.
 
-The blog's own benchmark (KDAttn/FlashKDA on a B300) needs Hopper/Blackwell
-features (TMA, tcgen05) that Ada doesn't have, so this does the same
-contract -> draft -> plan -> implement -> validate -> promote loop on tasks that
-fit sm_89.
+## Results
 
-## Layout
+| Task | Result |
+|---|---|
+| [KDA attention forward](kda-attention-sm89/) (original kernel) | 15/15 validation cases pass, max error about 3e-7 (tolerance 2e-2). About 8-20x faster than the PyTorch-eager chunkwise reference, depending on seq_len and run. |
+| [GEMM rehearsal](gemm-sm89/) (NVIDIA's CUTLASS example, tuned) | 73.4 TFLOPs at 4096^3 fp16, 107% of cuBLAS (68.5 TFLOPs). |
 
-| Directory | Task | Status |
-|---|---|---|
-| [gemm-sm89/](gemm-sm89/) | Rehearsal: CuTe-DSL Ampere dense GEMM | candidate_001 promoted |
-| [kda-attention-sm89/](kda-attention-sm89/) | Fused Kimi Delta Attention forward (CUDA C++) | candidate_001 promoted |
+Measured on an RTX 4070 SUPER under WSL2, CUDA 12.8, torch 2.14.1+cu130. Raw
+numbers are in each task's `benchmark.csv`; every run is appended.
 
-Each task has `docs/` (task contract, draft, plan), `candidates.jsonl` (one
-record per candidate with status and evidence), and `benchmark.csv` (results
-accumulate across runs). `runs/` and `profile/` are placeholders for logs and
-Nsight output.
+### kda-attention-sm89: the original work
 
-### gemm-sm89
+A fused CUDA C++ kernel for the chunkwise-DPLR forward pass of KDA
+([arXiv:2510.26692](https://arxiv.org/abs/2510.26692)), validated against an
+independent oracle. `candidates/candidate_001_fused_cuda/` runs one kernel
+launch per 64-row chunk, one CTA per (batch*head), 128 threads and about 80 KB
+of dynamic shared memory. It uses scalar FMA and no tensor cores.
 
-NVIDIA's unmodified `tensorop_gemm.py` from CUTLASS
-(`~/cutlass-ref/examples/python/CuTeDSL/cute/ampere/kernel/dense_gemm/`),
-tuned only by `atom_layout_mnk`. Correct on all 4 target shapes against
-`torch.bmm`. At 4096^3 fp16, `atom_layout_mnk=2,2,1` gets 73.43 TFLOPs, 107.1%
-of cuBLAS (68.54 TFLOPs). The naive `1,1,1` layout got 9% of cuBLAS. See
-`gemm-sm89/benchmark.csv`.
+Two design points are worth reading in [`docs/draft.md`](kda-attention-sm89/docs/draft.md):
 
-```bash
-cd ~/cutlass-ref/examples/python/CuTeDSL
-python3 cute/ampere/kernel/dense_gemm/tensorop_gemm.py --mnkl 4096,4096,4096,1 \
-  --atom_layout_mnk 2,2,1 --ab_dtype Float16 --c_dtype Float16 --acc_dtype Float32 \
-  --a_major m --b_major n --c_major n --tolerance 1e-2   # expect PASS
-```
+- **Separable decay.** The reference materializes a `(C, C, d_h)` ratio tensor
+  `Gamma_t[h] / Gamma_s[h]`. It is multiplicatively separable, so after
+  pre-multiplying the decay into `k` and `q` (`K_bar = k*Gamma`,
+  `K_tilde = k/Gamma`, `Q_tilde = q*Gamma`), the coupling and intra-chunk terms
+  are plain small GEMMs. The large intermediate is never needed on-device.
+- **Sync-free forward substitution.** The one sequential step, over a chunk's
+  64 rows, never mixes value channels. It parallelizes across the 128 value
+  threads with no `__syncthreads()` inside the loop.
 
-### kda-attention-sm89
+The PyTorch-eager baseline is slow mainly because its triangular inversion
+issues one CUDA op per row (63 tiny launches per chunk). Much of the speedup is
+launch overhead avoided, not a claim of peak hardware efficiency.
 
-A fused CUDA C++ kernel for the chunkwise-DPLR forward pass of Kimi Delta
-Attention (arXiv:2510.26692), checked against the oracle in
-`~/kimi-delta-attention` (github.com/hwilner/kimi-delta-attention), which
-`reference.py` and `validate.py` import by absolute path.
+### gemm-sm89: toolchain rehearsal
 
-- `candidates/candidate_001_fused_cuda/`: one kernel launch per 64-row chunk,
-  one CTA per (batch*head), 128 threads, about 80KB dynamic shared memory. No
-  tensor cores.
-- Validation matrix: seq_len in {512, 2048, 8192} x 5 seeds = 15 cases, max
-  error about 3e-7 against a 2e-2 tolerance.
-- Speedup over PyTorch-eager `chunkwise_dplr_forward` was roughly 8-20x across
-  the runs in `kda-attention-sm89/benchmark.csv`, varying by run and seq_len.
-  The eager baseline is slow mainly because its triangular inversion issues one
-  CUDA op per row.
-- Key algebraic step: the reference's `(C, C, d_h)` ratio tensor is
-  multiplicatively separable, so the coupling and intra-chunk terms reduce to
-  small GEMMs after pre-multiplying the decay into k and q. Details are in
-  `docs/draft.md`.
+This runs NVIDIA's unmodified Ampere `tensorop_gemm.py` (CuTe-DSL) and sweeps
+only `atom_layout_mnk`: `(1,1,1)` reaches 9% of cuBLAS, `(2,2,1)` reaches 107%.
+It is a rehearsal of the workflow and a check that CuTe-DSL works on sm_89. The
+kernel is NVIDIA's, not mine.
+
+## Setup
+
+Requirements: an NVIDIA GPU with compute capability 8.9 (the `nvcc` flag is
+`-arch=sm_89`), CUDA toolkit 12.x, Python 3 and PyTorch with CUDA.
 
 ```bash
+# oracle (reference implementation the kernel is validated against)
+git clone https://github.com/hwilner/kimi-delta-attention ~/kimi-delta-attention
+# override the location with KDA_ORACLE_DIR
+
+# build the kernel
+bash kda-attention-sm89/candidates/candidate_001_fused_cuda/compile.sh
+
+# validate and benchmark
 cd kda-attention-sm89
-python3 validate.py [candidate_name]   # default candidate_001_fused_cuda; expect ALL PASS, 15 cases
-python3 benchmark.py [candidate_name]  # appends to benchmark.csv
+python3 validate.py [candidate_name]    # default candidate_001_fused_cuda; expect ALL PASS (15 cases)
+python3 benchmark.py [candidate_name]   # appends to benchmark.csv
 ```
 
-To add a candidate, create `candidates/candidate_002_<name>/` with a
-`kernel.py` that exposes `forward`, then run the commands above with its name.
-No harness changes are needed. `libkda.so` is a build product and is not
-committed; rebuild it with `candidates/candidate_001_fused_cuda/compile.sh`
-(`nvcc -arch=sm_89 -O3 --shared -Xcompiler -fPIC`) before running.
+For the GEMM rehearsal, also `pip install nvidia-cutlass-dsl==4.8.0` and check
+out [NVIDIA/cutlass](https://github.com/NVIDIA/cutlass) to `~/cutlass-ref`
+(`examples/python/CuTeDSL` is what's used; override with
+`CUTLASS_CUTE_DSL_DIR`). Then:
 
-## Provenance
+```bash
+python3 gemm-sm89/benchmark.py
+```
 
-This work started in a Windows-side Claude Code session, driving WSL through
-`wsl.exe`. Its project notes were `kda_gemm_sm89_progress.md` in that session's
-memory directory
-(`C:\Users\djord\.claude\projects\c--Users-djord-Documents-Programs-Kernels\memory\`).
-That session:
+To add a candidate, create `kda-attention-sm89/candidates/candidate_002_<name>/`
+with a `kernel.py` that exposes `forward(q, k, v, alpha, beta, chunk_size=64)`.
+`validate.py` and `benchmark.py` need no changes.
 
-1. Set up the environment, including the torch 2.14.1 upgrade that
-   `nvidia-cutlass-dsl` 4.8.0 requires.
-2. Did the GEMM rehearsal.
-3. Wrote and promoted the KDA attention kernel.
-4. Reorganized `kda-attention-sm89` into the multi-candidate layout above.
+## Repo layout
 
-This repo is the continuation, run natively inside WSL. The `~/kda-repo`
-checkout was used for an initial re-verification attempt, but the work lives
-here, so this directory is the repo of record. The re-verification checklist
-for a fresh session:
+Each task has `docs/` (contract, draft, plan), `candidates.jsonl` (one record
+per candidate with status and evidence) and `benchmark.csv`. `runs/` and
+`profile/` are placeholders for logs and Nsight output. `libkda.so` is a build
+product and is not committed.
 
-1. `nvidia-smi`, `nvcc --version`, and
-   `python3 -c "import torch; print(torch.__version__, torch.cuda.is_available())"`
-   (expect `2.14.1+cu130 True`).
-2. `validate.py` and `benchmark.py` in `kda-attention-sm89`.
-3. The `tensorop_gemm.py` command above.
+## Limitations and next steps
 
-## Known limitations and next steps
+- candidate_001 launches only 8 CTAs (batch 2 x 4 heads), well below the 36 SMs
+  of a 4070 SUPER, and uses no tensor cores. Both are hypotheses, not profiled
+  findings.
+- Nsight Compute fails under WSL with `ERR_NVGPUCTRPERM` until GPU performance
+  counters are enabled on the Windows host. Profiling is the next step before
+  candidate_002 (more CTAs, `mma.sync` for the GEMM-shaped steps).
 
-- candidate_001 launches only 8 CTAs (batch 2 x 4 heads), far below the 36 SMs
-  of a 4070 SUPER, and uses scalar FMA rather than `mma.sync`. Both are
-  hypotheses, not profiled facts.
-- Nsight Compute (`ncu`) fails under WSL with `ERR_NVGPUCTRPERM`. GPU
-  performance counters have to be enabled on the Windows host (NVIDIA Control
-  Panel, or the registry setting) before candidate_002 work can be
-  evidence-driven.
+## Credits
+
+- Methodology: [NVlabs/kda](https://github.com/NVlabs/kda).
+- Oracle (MIT): [hwilner/kimi-delta-attention](https://github.com/hwilner/kimi-delta-attention).
+- GEMM example: [NVIDIA/cutlass](https://github.com/NVIDIA/cutlass), not included here.
+- Algorithm: Kimi Linear, [arXiv:2510.26692](https://arxiv.org/abs/2510.26692).
+- Developed with [Claude Code](https://claude.com/claude-code).
+
+## License
+
+MIT, see [LICENSE](LICENSE).

@@ -11,7 +11,7 @@ import sys
 
 TASK_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, TASK_ROOT)
-sys.path.insert(0, "/home/popina/kimi-delta-attention")
+sys.path.insert(0, os.environ.get("KDA_ORACLE_DIR", os.path.expanduser("~/kimi-delta-attention")))
 
 import torch
 from reference import make_inputs, reference_chunkwise
