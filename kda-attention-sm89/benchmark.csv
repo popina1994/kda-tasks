@@ -1,0 +1,13 @@
+mode,seq_len,exec_us,speedup_vs_pytorch
+pytorch_eager,512,73712.35,1.0
+candidate_001_fused_cuda,512,9757.55,7.55
+pytorch_eager,2048,347368.72,1.0
+candidate_001_fused_cuda,2048,35173.84,9.88
+pytorch_eager,8192,1626227.34,1.0
+candidate_001_fused_cuda,8192,141313.65,11.51
+pytorch_eager,512,191742.48,1.0
+candidate_001_fused_cuda,512,9753.22,19.66
+pytorch_eager,2048,313237.84,1.0
+candidate_001_fused_cuda,2048,36896.71,8.49
+pytorch_eager,8192,1489572.79,1.0
+candidate_001_fused_cuda,8192,140691.02,10.59
