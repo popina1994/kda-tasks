@@ -1,0 +1,12 @@
+# Tool configuration only; this repo is not a pip package.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["candidates/*/libkda.so"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+# The scripts insert the oracle onto sys.path before importing from it.
+ignore = ["E402"]

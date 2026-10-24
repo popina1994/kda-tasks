@@ -1,0 +1,5 @@
+# Developed against torch 2.14.1+cu130 on an RTX 4070 SUPER (sm_89).
+# Install a CUDA build of torch for your driver; see https://pytorch.org/get-started/locally/
+torch==2.14.1
+numpy>=1.24
+einops>=0.7  # required by the oracle repo (hwilner/kimi-delta-attention)

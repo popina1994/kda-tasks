@@ -1,13 +1,19 @@
-mode,seq_len,exec_us,speedup_vs_pytorch
-pytorch_eager,512,73712.35,1.0
-candidate_001_fused_cuda,512,9757.55,7.55
-pytorch_eager,2048,347368.72,1.0
-candidate_001_fused_cuda,2048,35173.84,9.88
-pytorch_eager,8192,1626227.34,1.0
-candidate_001_fused_cuda,8192,141313.65,11.51
-pytorch_eager,512,191742.48,1.0
-candidate_001_fused_cuda,512,9753.22,19.66
-pytorch_eager,2048,313237.84,1.0
-candidate_001_fused_cuda,2048,36896.71,8.49
-pytorch_eager,8192,1489572.79,1.0
-candidate_001_fused_cuda,8192,140691.02,10.59
+mode,seq_len,exec_us,speedup_vs_pytorch,gpu,torch,date
+pytorch_eager,512,73712.35,1.0,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+candidate_001_fused_cuda,512,9757.55,7.55,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+pytorch_eager,2048,347368.72,1.0,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+candidate_001_fused_cuda,2048,35173.84,9.88,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+pytorch_eager,8192,1626227.34,1.0,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+candidate_001_fused_cuda,8192,141313.65,11.51,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+pytorch_eager,512,191742.48,1.0,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+candidate_001_fused_cuda,512,9753.22,19.66,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+pytorch_eager,2048,313237.84,1.0,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+candidate_001_fused_cuda,2048,36896.71,8.49,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+pytorch_eager,8192,1489572.79,1.0,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+candidate_001_fused_cuda,8192,140691.02,10.59,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,
+pytorch_eager,512,96360.7,1.0,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,2026-10-24
+candidate_001_fused_cuda,512,9712.18,9.92,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,2026-10-24
+pytorch_eager,2048,526558.03,1.0,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,2026-10-24
+candidate_001_fused_cuda,2048,36813.38,14.3,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,2026-10-24
+pytorch_eager,8192,1567813.68,1.0,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,2026-10-24
+candidate_001_fused_cuda,8192,140876.77,11.13,NVIDIA GeForce RTX 4070 SUPER,2.14.1+cu130,2026-10-24

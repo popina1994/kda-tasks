@@ -9,6 +9,7 @@ import importlib
 import os
 import sys
 import time
+from datetime import datetime, timezone
 
 TASK_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, TASK_ROOT)
@@ -47,23 +48,28 @@ def main():
     print(f"candidate: {candidate_name}")
 
     write_header = not os.path.exists(CSV_PATH)
+    meta = (
+        torch.cuda.get_device_name(0),
+        torch.__version__,
+        datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+    )
     rows = []
     print("mode,seq_len,exec_us,speedup_vs_pytorch")
     for seq_len in SEQ_LENS:
         q, k, v, alpha, beta = make_inputs(seq_len=seq_len, seed=0)
 
         pt_us = timed(reference_chunkwise, q, k, v, alpha, beta)
-        rows.append(("pytorch_eager", seq_len, round(pt_us, 2), 1.0))
+        rows.append(("pytorch_eager", seq_len, round(pt_us, 2), 1.0, *meta))
         print(f"pytorch_eager,{seq_len},{pt_us:.2f},1.00")
 
         cu_us = timed(forward, q, k, v, alpha, beta)
         speedup = pt_us / cu_us
-        rows.append((candidate_name, seq_len, round(cu_us, 2), round(speedup, 2)))
+        rows.append((candidate_name, seq_len, round(cu_us, 2), round(speedup, 2), *meta))
         print(f"{candidate_name},{seq_len},{cu_us:.2f},{speedup:.2f}")
 
     with open(CSV_PATH, "a") as f:
         if write_header:
-            f.write("mode,seq_len,exec_us,speedup_vs_pytorch\n")
+            f.write("mode,seq_len,exec_us,speedup_vs_pytorch,gpu,torch,date\n")
         for r in rows:
             f.write(",".join(str(x) for x in r) + "\n")
 

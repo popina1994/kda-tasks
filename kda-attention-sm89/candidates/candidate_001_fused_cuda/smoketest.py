@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(HERE, "..", ".."))
 sys.path.insert(0, os.environ.get("KDA_ORACLE_DIR", os.path.expanduser("~/kimi-delta-attention")))
 
 import torch
-from reference import make_inputs, reference_naive, reference_chunkwise
+from reference import make_inputs, reference_chunkwise
 from kernel import kda_candidate_001
 
 torch.manual_seed(0)
@@ -22,7 +22,10 @@ print(f"output shape: ref={tuple(out_ref.shape)} cuda={tuple(out_cu.shape)}")
 print(f"state shape: ref={tuple(state_ref.shape)} cuda={tuple(state_cu.shape)}")
 print(f"max abs output error: {out_err:.4e}")
 print(f"max abs state error: {state_err:.4e}")
-print(f"output rel-ish check: ref mean|.|={out_ref.abs().mean().item():.4e} cuda mean|.|={out_cu.abs().mean().item():.4e}")
+print(
+    f"output rel-ish check: ref mean|.|={out_ref.abs().mean().item():.4e} "
+    f"cuda mean|.|={out_cu.abs().mean().item():.4e}"
+)
 
 if out_err < 2e-2 and state_err < 2e-2:
     print("PASS")

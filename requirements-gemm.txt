@@ -1,0 +1,4 @@
+# Extra dependency for the gemm-sm89 rehearsal (CuTe-DSL). Also needs a
+# NVIDIA/cutlass checkout; see README.
+-r requirements.txt
+nvidia-cutlass-dsl==4.8.0

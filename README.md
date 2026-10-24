@@ -14,11 +14,21 @@ workflow to tasks that fit sm_89.
 
 | Task | Result |
 |---|---|
-| [KDA attention forward](kda-attention-sm89/) (original kernel) | 15/15 validation cases pass, max error about 3e-7 (tolerance 2e-2). About 8-20x faster than the PyTorch-eager chunkwise reference, depending on seq_len and run. |
+| [KDA attention forward](kda-attention-sm89/) (original kernel) | 15/15 validation cases pass, max error about 3e-7 (tolerance 2e-2). About 7.5-20x faster than the PyTorch-eager chunkwise reference, depending on seq_len and run. |
 | [GEMM rehearsal](gemm-sm89/) (NVIDIA's CUTLASS example, tuned) | 73.4 TFLOPs at 4096^3 fp16, 107% of cuBLAS (68.5 TFLOPs). |
 
 Measured on an RTX 4070 SUPER under WSL2, CUDA 12.8, torch 2.14.1+cu130. Raw
-numbers are in each task's `benchmark.csv`; every run is appended.
+numbers are in each task's `benchmark.csv`; every run is appended, with the GPU,
+torch version and date. The first two attention runs predate that metadata: their
+GPU and torch columns were filled in afterwards from the project notes and their
+date is blank.
+
+![Speedup of candidate_001 over PyTorch eager](kda-attention-sm89/docs/speedup.png)
+
+Only three runs are recorded so far. The spread (for example 7.5x vs 19.7x at
+seq_len 512) comes mostly from the eager baseline's timing varying between runs,
+not the kernel, so treat the speedup as an order of magnitude, not a precise
+figure.
 
 ### kda-attention-sm89: the original work
 
@@ -53,9 +63,12 @@ kernel is NVIDIA's, not mine.
 ## Setup
 
 Requirements: an NVIDIA GPU with compute capability 8.9 (the `nvcc` flag is
-`-arch=sm_89`), CUDA toolkit 12.x, Python 3 and PyTorch with CUDA.
+`-arch=sm_89`), CUDA toolkit 12.x and Python 3.
 
 ```bash
+pip install -r requirements-dev.txt   # torch, numpy, einops, pytest, ruff, matplotlib
+# torch must be a CUDA build for your driver; see https://pytorch.org/get-started/locally/
+
 # oracle (reference implementation the kernel is validated against)
 git clone https://github.com/hwilner/kimi-delta-attention ~/kimi-delta-attention
 # override the location with KDA_ORACLE_DIR
@@ -69,7 +82,7 @@ python3 validate.py [candidate_name]    # default candidate_001_fused_cuda; expe
 python3 benchmark.py [candidate_name]   # appends to benchmark.csv
 ```
 
-For the GEMM rehearsal, also `pip install nvidia-cutlass-dsl==4.8.0` and check
+For the GEMM rehearsal, also `pip install -r requirements-gemm.txt` and check
 out [NVIDIA/cutlass](https://github.com/NVIDIA/cutlass) to `~/cutlass-ref`
 (`examples/python/CuTeDSL` is what's used; override with
 `CUTLASS_CUTE_DSL_DIR`). Then:
@@ -81,6 +94,32 @@ python3 gemm-sm89/benchmark.py
 To add a candidate, create `kda-attention-sm89/candidates/candidate_002_<name>/`
 with a `kernel.py` that exposes `forward(q, k, v, alpha, beta, chunk_size=64)`.
 `validate.py` and `benchmark.py` need no changes.
+
+## Tests and development
+
+```bash
+make build      # compile libkda.so
+make test       # pytest: 16 tests per candidate, about 5 seconds
+make validate   # the 15-case script from validate.py
+make bench      # append a row set to benchmark.csv
+make plot       # regenerate kda-attention-sm89/docs/speedup.png
+make lint       # ruff
+```
+
+`CANDIDATE=candidate_002_<name>` selects another candidate for `build`,
+`validate` and `bench`. `make test` already runs every `candidates/*/kernel.py`
+it finds.
+
+The tests in [`tests/`](tests/) compare each candidate against both the chunkwise
+reference and the naive O(L) recurrence. They cover sequence lengths that are not
+a multiple of the chunk size, batch sizes 1 and 3, non-contiguous inputs,
+repeated calls (the kernel updates state in place) and output shapes and dtypes.
+They skip themselves when there is no sm_89 GPU or the oracle repo is missing.
+I checked that they fail on a deliberately wrong kernel (14 of 16 fail). The
+other two only check shapes and repeat calls, not values.
+
+CI (`.github/workflows/lint.yml`) runs `ruff` and a syntax check only. GitHub's
+hosted runners have no GPU, so the kernel tests run locally.
 
 ## Repo layout
 

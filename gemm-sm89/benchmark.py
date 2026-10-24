@@ -34,7 +34,7 @@ def main():
     print("mode,M,N,K,atom_layout,exec_us,TFLOPs,pct_of_cublas")
     rows = []
 
-    for (m, n, k, l) in SHAPES:
+    for (m, n, k, batch) in SHAPES:
         cublas_tf, cublas_us = cublas_tflops(m, n, k)
         rows.append(("cublas_ref", m, n, k, "-", round(cublas_us, 2), round(cublas_tf, 2), 100.0))
         print(f"cublas_ref,{m},{n},{k},-,{cublas_us:.2f},{cublas_tf:.2f},100.00")
@@ -43,7 +43,7 @@ def main():
         for atom in layouts_to_try:
             try:
                 exec_us = gemm_run(
-                    (m, n, k, l),
+                    (m, n, k, batch),
                     cutlass.Float16, cutlass.Float16, cutlass.Float32,
                     "m", "n", "n",
                     atom,
